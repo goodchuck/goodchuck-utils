@@ -1,6 +1,9 @@
 // Date utilities
 export * from './date';
 
+// Form utilities
+export * from './form';
+
 // String utilities (placeholder for future)
 // export * from './string';
 
