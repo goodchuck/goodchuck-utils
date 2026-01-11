@@ -7,6 +7,12 @@ export * from './form';
 // String utilities
 export * from './string';
 
+// Number utilities
+export * from './number';
+
+// Mock data utilities
+export * from './mock';
+
 // React Hooks (import separately: 'goodchuck-utils/hooks')
 // Note: Hooks are not exported from main entry to avoid React dependency for non-React users
 // export * from './hooks';
