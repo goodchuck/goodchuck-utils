@@ -8,6 +8,8 @@ import {
   headerTitleStyle,
   getStatusBadgeStyle,
   getCopyButtonStyle,
+  tabContainerStyle,
+  getTabStyle,
   contentStyle,
   sectionTitleStyle,
   codeBlockStyle,
@@ -37,6 +39,10 @@ export type Props = {
   formState: FormState;
   /** 현재 폼 values (watch() 결과) */
   values?: Record<string, any>;
+  /** 초기값 (defaultValues 또는 reset()으로 설정한 원본 값, changedFields 계산에 사용) */
+  originalValues?: Record<string, any>;
+  /** Validation 스키마 정보 (zod, yup 등) - refine 조건 표시에 사용 */
+  validationSchema?: Record<string, any>;
   /** 표시 위치 (기본값: 'bottom-left') */
   position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   /** 패널 제목 (기본값: 'Form DevTools') */
@@ -54,29 +60,31 @@ export type Props = {
  * import { FormDevTools } from 'goodchuck-utils/components/dev';
  *
  * function MyForm() {
+ *   // 신규 폼: defaultValues 사용
+ *   const defaultValues = {
+ *     username: '',
+ *     email: '',
+ *     age: 0,
+ *   };
+ *
  *   const { register, handleSubmit, formState, watch } = useForm({
- *     defaultValues: {
- *       username: '',
- *       email: '',
- *       age: 0,
- *     }
+ *     defaultValues,
  *   });
  *
- *   const values = watch(); // 모든 값 watch
- *
- *   const onSubmit = (data) => {
- *     console.log(data);
- *   };
+ *   const values = watch();
  *
  *   return (
  *     <form onSubmit={handleSubmit(onSubmit)}>
- *       <input {...register('username', { required: 'Username is required' })} />
- *       <input {...register('email', { required: 'Email is required' })} />
- *       <input type="number" {...register('age', { min: 18 })} />
+ *       <input {...register('username')} />
+ *       <input {...register('email')} />
  *       <button type="submit">Submit</button>
  *
  *       {import.meta.env.DEV && (
- *         <FormDevTools formState={formState} values={values} />
+ *         <FormDevTools 
+ *           formState={formState} 
+ *           values={values}
+ *           originalValues={defaultValues}
+ *         />
  *       )}
  *     </form>
  *   );
@@ -85,19 +93,40 @@ export type Props = {
  *
  * @example
  * ```tsx
- * // Create React App 프로젝트
- * {process.env.NODE_ENV === 'development' && (
- *   <FormDevTools
- *     formState={formState}
- *     values={values}
- *     position="top-right"
- *     title="User Form Debug"
- *   />
- * )}
+ * // 수정 폼: reset()으로 초기값 설정
+ * function EditForm({ userData }) {
+ *   const { register, handleSubmit, formState, watch, reset } = useForm();
+ *
+ *   useEffect(() => {
+ *     // 서버에서 가져온 데이터로 폼 초기화
+ *     reset(userData);
+ *   }, [userData, reset]);
+ *
+ *   const values = watch();
+ *
+ *   return (
+ *     <form onSubmit={handleSubmit(onSubmit)}>
+ *       <input {...register('username')} />
+ *       <input {...register('email')} />
+ *       <button type="submit">Update</button>
+ *
+ *       {process.env.NODE_ENV === 'development' && (
+ *         <FormDevTools
+ *           formState={formState}
+ *           values={values}
+ *           originalValues={userData} // reset()으로 설정한 원본 값
+ *           position="top-right"
+ *           title="Edit Form Debug"
+ *         />
+ *       )}
+ *     </form>
+ *   );
+ * }
  * ```
  */
-export default function FormDevTools({ formState, values, position = 'bottom-left', title = 'Form DevTools' }: Props) {
+export default function FormDevTools({ formState, values, originalValues, validationSchema, position = 'bottom-left', title = 'Form DevTools' }: Props) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'values' | 'errors' | 'changed' | 'state' | 'validation'>('all');
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
   const [panelSize, setPanelSize] = useState({ width: 500, height: 400 });
   const [isDragging, setIsDragging] = useState(false);
@@ -112,6 +141,7 @@ export default function FormDevTools({ formState, values, position = 'bottom-lef
     const data = {
       values,
       errors: formState.errors,
+      changedFields,
       dirtyFields: formState.dirtyFields,
       touchedFields: formState.touchedFields,
       isValid: formState.isValid,
@@ -125,6 +155,45 @@ export default function FormDevTools({ formState, values, position = 'bottom-lef
   const errorCount = Object.keys(formState.errors || {}).length;
   const dirtyFieldsCount = Object.keys(formState.dirtyFields || {}).length;
   const touchedFieldsCount = Object.keys(formState.touchedFields || {}).length;
+
+  // Changed Fields 계산: dirtyFields를 기반으로 실제 변경된 값들을 추출
+  const getChangedFields = () => {
+    if (!formState.dirtyFields || !values) return {};
+    
+    const changed: Record<string, any> = {};
+    const getNestedValue = (obj: Record<string, any>, path: string) => {
+      return path.split('.').reduce((acc, key) => acc?.[key], obj);
+    };
+
+    const processDirtyFields = (dirty: Record<string, any>, prefix = '') => {
+      Object.keys(dirty).forEach((key) => {
+        const fullPath = prefix ? `${prefix}.${key}` : key;
+        const dirtyValue = dirty[key];
+        
+        if (dirtyValue === true) {
+          // 최종 필드인 경우
+          const currentValue = getNestedValue(values, fullPath);
+          const originalValue = originalValues ? getNestedValue(originalValues, fullPath) : undefined;
+          
+          if (JSON.stringify(currentValue) !== JSON.stringify(originalValue)) {
+            changed[fullPath] = {
+              from: originalValue,
+              to: currentValue,
+            };
+          }
+        } else if (typeof dirtyValue === 'object' && dirtyValue !== null) {
+          // 중첩된 객체인 경우 재귀적으로 처리
+          processDirtyFields(dirtyValue, fullPath);
+        }
+      });
+    };
+
+    processDirtyFields(formState.dirtyFields);
+    return changed;
+  };
+
+  const changedFields = getChangedFields();
+  const changedFieldsCount = Object.keys(changedFields).length;
 
   // 드래그 핸들러
   useEffect(() => {
@@ -243,52 +312,233 @@ export default function FormDevTools({ formState, values, position = 'bottom-lef
             </button>
           </div>
 
+          {/* 탭 메뉴 */}
+          <div style={tabContainerStyle}>
+            <button
+              onClick={() => setActiveTab('all')}
+              style={getTabStyle(activeTab === 'all')}
+              onMouseEnter={(e) => {
+                if (activeTab !== 'all') e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== 'all') e.currentTarget.style.backgroundColor = 'transparent';
+              }}>
+              All
+            </button>
+            <button
+              onClick={() => setActiveTab('values')}
+              style={getTabStyle(activeTab === 'values')}
+              onMouseEnter={(e) => {
+                if (activeTab !== 'values') e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== 'values') e.currentTarget.style.backgroundColor = 'transparent';
+              }}>
+              Values
+            </button>
+            <button
+              onClick={() => setActiveTab('errors')}
+              style={getTabStyle(activeTab === 'errors')}
+              onMouseEnter={(e) => {
+                if (activeTab !== 'errors') e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== 'errors') e.currentTarget.style.backgroundColor = 'transparent';
+              }}>
+              Errors {errorCount > 0 && `(${errorCount})`}
+            </button>
+            <button
+              onClick={() => setActiveTab('changed')}
+              style={getTabStyle(activeTab === 'changed')}
+              onMouseEnter={(e) => {
+                if (activeTab !== 'changed') e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== 'changed') e.currentTarget.style.backgroundColor = 'transparent';
+              }}>
+              Changed {changedFieldsCount > 0 && `(${changedFieldsCount})`}
+            </button>
+            <button
+              onClick={() => setActiveTab('state')}
+              style={getTabStyle(activeTab === 'state')}
+              onMouseEnter={(e) => {
+                if (activeTab !== 'state') e.currentTarget.style.backgroundColor = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                if (activeTab !== 'state') e.currentTarget.style.backgroundColor = 'transparent';
+              }}>
+              State
+            </button>
+            {validationSchema && (
+              <button
+                onClick={() => setActiveTab('validation')}
+                style={getTabStyle(activeTab === 'validation')}
+                onMouseEnter={(e) => {
+                  if (activeTab !== 'validation') e.currentTarget.style.backgroundColor = '#f3f4f6';
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== 'validation') e.currentTarget.style.backgroundColor = 'transparent';
+                }}>
+                Validation
+              </button>
+            )}
+          </div>
+
           <div style={contentStyle}>
-            {/* Stats 섹션 */}
-            <div style={statsContainerStyle}>
-              <div style={statCardStyle}>
-                <div style={statLabelStyle}>Dirty Fields</div>
-                <div style={statValueStyle}>{dirtyFieldsCount}</div>
-              </div>
-              <div style={statCardStyle}>
-                <div style={statLabelStyle}>Touched Fields</div>
-                <div style={statValueStyle}>{touchedFieldsCount}</div>
-              </div>
-              <div style={statCardStyle}>
-                <div style={statLabelStyle}>Submit Count</div>
-                <div style={statValueStyle}>{formState.submitCount || 0}</div>
-              </div>
-              <div style={statCardStyle}>
-                <div style={statLabelStyle}>Submitting</div>
-                <div style={statValueStyle}>{formState.isSubmitting ? 'Yes' : 'No'}</div>
-              </div>
-            </div>
-
-            {/* Form Values 섹션 */}
-            <div style={sectionTitleStyle}>Form Values</div>
-            <pre style={codeBlockStyle}>{JSON.stringify(values || {}, null, 2)}</pre>
-
-            {/* Errors 섹션 */}
-            {errorCount > 0 && (
+            {/* All 탭 - 전체 보기 */}
+            {activeTab === 'all' && (
               <>
-                <div style={sectionTitleStyle}>Validation Errors ({errorCount})</div>
-                {renderErrors()}
+                {/* Stats 섹션 */}
+                <div style={statsContainerStyle}>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Dirty Fields</div>
+                    <div style={statValueStyle}>{dirtyFieldsCount}</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Touched Fields</div>
+                    <div style={statValueStyle}>{touchedFieldsCount}</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Submit Count</div>
+                    <div style={statValueStyle}>{formState.submitCount || 0}</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Submitting</div>
+                    <div style={statValueStyle}>{formState.isSubmitting ? 'Yes' : 'No'}</div>
+                  </div>
+                </div>
+
+                {/* Form Values */}
+                <div style={sectionTitleStyle}>Form Values</div>
+                <pre style={codeBlockStyle}>{JSON.stringify(values || {}, null, 2)}</pre>
+
+                {/* Errors */}
+                {errorCount > 0 && (
+                  <>
+                    <div style={sectionTitleStyle}>Validation Errors ({errorCount})</div>
+                    {renderErrors()}
+                  </>
+                )}
+
+                {/* Changed Fields */}
+                {changedFieldsCount > 0 && (
+                  <>
+                    <div style={sectionTitleStyle}>Changed Fields ({changedFieldsCount})</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(changedFields, null, 2)}</pre>
+                  </>
+                )}
+
+                {/* Dirty Fields */}
+                {dirtyFieldsCount > 0 && (
+                  <>
+                    <div style={sectionTitleStyle}>Dirty Fields</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(formState.dirtyFields || {}, null, 2)}</pre>
+                  </>
+                )}
+
+                {/* Touched Fields */}
+                {touchedFieldsCount > 0 && (
+                  <>
+                    <div style={sectionTitleStyle}>Touched Fields</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(formState.touchedFields || {}, null, 2)}</pre>
+                  </>
+                )}
               </>
             )}
 
-            {/* Dirty Fields */}
-            {dirtyFieldsCount > 0 && (
+            {/* Values 탭 */}
+            {activeTab === 'values' && (
               <>
-                <div style={sectionTitleStyle}>Dirty Fields</div>
-                <pre style={codeBlockStyle}>{JSON.stringify(formState.dirtyFields || {}, null, 2)}</pre>
+                {values && Object.keys(values).length > 0 ? (
+                  <>
+                    <div style={sectionTitleStyle}>Form Values</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(values, null, 2)}</pre>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 20px', fontSize: '13px' }}>
+                    <div style={{ marginBottom: '8px' }}>No form values</div>
+                    <div style={{ fontSize: '11px', color: '#d1d5db' }}>
+                      Form values will appear here
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
-            {/* Touched Fields */}
-            {touchedFieldsCount > 0 && (
+            {/* Errors 탭 */}
+            {activeTab === 'errors' && (
               <>
-                <div style={sectionTitleStyle}>Touched Fields</div>
-                <pre style={codeBlockStyle}>{JSON.stringify(formState.touchedFields || {}, null, 2)}</pre>
+                <div style={sectionTitleStyle}>Validation Errors {errorCount > 0 && `(${errorCount})`}</div>
+                {errorCount > 0 ? renderErrors() : (
+                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px', fontSize: '13px' }}>
+                    No validation errors
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Changed 탭 */}
+            {activeTab === 'changed' && (
+              <>
+                {changedFieldsCount > 0 ? (
+                  <>
+                    <div style={sectionTitleStyle}>Changed Fields ({changedFieldsCount})</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(changedFields, null, 2)}</pre>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 20px', fontSize: '13px' }}>
+                    <div style={{ marginBottom: '8px' }}>No changed fields</div>
+                    <div style={{ fontSize: '11px', color: '#d1d5db' }}>
+                      Fields will appear here when you modify form values
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* State 탭 */}
+            {activeTab === 'state' && (
+              <>
+                <div style={statsContainerStyle}>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Dirty Fields</div>
+                    <div style={statValueStyle}>{dirtyFieldsCount}</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Touched Fields</div>
+                    <div style={statValueStyle}>{touchedFieldsCount}</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Submit Count</div>
+                    <div style={statValueStyle}>{formState.submitCount || 0}</div>
+                  </div>
+                  <div style={statCardStyle}>
+                    <div style={statLabelStyle}>Submitting</div>
+                    <div style={statValueStyle}>{formState.isSubmitting ? 'Yes' : 'No'}</div>
+                  </div>
+                </div>
+
+                {dirtyFieldsCount > 0 && (
+                  <>
+                    <div style={sectionTitleStyle}>Dirty Fields</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(formState.dirtyFields || {}, null, 2)}</pre>
+                  </>
+                )}
+
+                {touchedFieldsCount > 0 && (
+                  <>
+                    <div style={sectionTitleStyle}>Touched Fields</div>
+                    <pre style={codeBlockStyle}>{JSON.stringify(formState.touchedFields || {}, null, 2)}</pre>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Validation 탭 - refine 조건 및 스키마 정보 */}
+            {activeTab === 'validation' && validationSchema && (
+              <>
+                <div style={sectionTitleStyle}>Validation Schema</div>
+                <pre style={codeBlockStyle}>{JSON.stringify(validationSchema, null, 2)}</pre>
               </>
             )}
           </div>

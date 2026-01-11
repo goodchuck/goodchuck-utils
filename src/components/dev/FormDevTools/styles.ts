@@ -111,6 +111,27 @@ export const getCopyButtonStyle = (isCopied: boolean): CSSProperties => ({
   transition: 'background-color 0.2s',
 });
 
+export const tabContainerStyle: CSSProperties = {
+  display: 'flex',
+  borderBottom: '1px solid #e5e7eb',
+  backgroundColor: '#f9fafb',
+  overflowX: 'auto',
+};
+
+export const getTabStyle = (isActive: boolean): CSSProperties => ({
+  flex: '0 0 auto',
+  padding: '10px 16px',
+  border: 'none',
+  backgroundColor: isActive ? 'white' : 'transparent',
+  color: isActive ? '#8b5cf6' : '#6b7280',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: isActive ? 600 : 400,
+  borderBottom: isActive ? '2px solid #8b5cf6' : '2px solid transparent',
+  transition: 'all 0.15s',
+  whiteSpace: 'nowrap',
+});
+
 export const contentStyle: CSSProperties = {
   flex: 1,
   minHeight: 0, // flexbox에서 스크롤이 제대로 작동하도록 필수
@@ -138,6 +159,8 @@ export const codeBlockStyle: CSSProperties = {
   maxHeight: '300px',
   marginBottom: '16px',
   color: '#111827', // 검은색 텍스트
+  textAlign: 'left', // 왼쪽 정렬
+  whiteSpace: 'pre', // 공백과 줄바꿈 유지
 };
 
 export const errorItemStyle: CSSProperties = {
