@@ -18,6 +18,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./src/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.js",
+      "require": "./src/hooks/index.js"
     }
   },
   "keywords": [],
@@ -33,7 +38,16 @@
     "src/**/*.ts"
   ],
   "devDependencies": {
+    "@types/react": "^19.2.8",
     "@vitest/ui": "^4.0.16",
     "vitest": "^4.0.16"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   }
 }
