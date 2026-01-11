@@ -1,0 +1,39 @@
+{
+  "name": "goodchuck-utils",
+  "version": "1.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "prepare": "npm run build:tsc",
+    "prepublishOnly": "npm run test:run && npm run build:tsc",
+    "build": "npm run build",
+    "build:tsc": "tsc",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./src/index.js"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/node": "^25.0.6",
+    "dayjs": "^1.11.19",
+    "typescript": "^5.9.3"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "devDependencies": {
+    "@vitest/ui": "^4.0.16",
+    "vitest": "^4.0.16"
+  }
+}
