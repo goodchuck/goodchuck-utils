@@ -43,6 +43,18 @@ export type Props = {
   originalValues?: Record<string, any>;
   /** Validation 스키마 정보 (zod, yup 등) - refine 조건 표시에 사용 */
   validationSchema?: Record<string, any>;
+  /** react-hook-form의 reset 함수 (mock 데이터 생성 후 폼에 채우기 위해 필요) */
+  reset?: (values: Record<string, any>, options?: { keepDirty?: boolean; keepTouched?: boolean }) => void;
+  /** react-hook-form의 setValue 함수 (dirty 상태를 true로 만들기 위해 필요, 선택사항) */
+  setValue?: (name: string, value: any, options?: { shouldDirty?: boolean; shouldValidate?: boolean }) => void;
+  /** react-hook-form의 trigger 함수 (validation 실행을 위해 필요, 선택사항) */
+  trigger?: (name?: string | string[]) => Promise<boolean>;
+  /** Mock 데이터 생성 함수 (비동기 가능) */
+  generateMock?: (params: {
+    values?: Record<string, any>;
+    originalValues?: Record<string, any>;
+    validationSchema?: Record<string, any>;
+  }) => Promise<Record<string, any>> | Record<string, any>;
   /** 표시 위치 (기본값: 'bottom-left') */
   position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   /** 패널 제목 (기본값: 'Form DevTools') */
@@ -84,6 +96,26 @@ export type Props = {
  *           formState={formState} 
  *           values={values}
  *           originalValues={defaultValues}
+ *           reset={reset} // mock 데이터 생성 후 폼에 채우기 위해 필요
+ *           generateMock={async ({ values, validationSchema }) => {
+ *             // AI를 사용한 mock 데이터 생성 (예시)
+ *             const response = await fetch('https://api.openai.com/v1/chat/completions', {
+ *               method: 'POST',
+ *               headers: {
+ *                 'Content-Type': 'application/json',
+ *                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+ *               },
+ *               body: JSON.stringify({
+ *                 model: 'gpt-3.5-turbo',
+ *                 messages: [{
+ *                   role: 'user',
+ *                   content: `다음 폼 필드에 맞는 mock 데이터를 생성해주세요: ${JSON.stringify(values)}`
+ *                 }],
+ *               }),
+ *             });
+ *             const data = await response.json();
+ *             return JSON.parse(data.choices[0].message.content);
+ *           }}
  *         />
  *       )}
  *     </form>
@@ -124,7 +156,7 @@ export type Props = {
  * }
  * ```
  */
-export default function FormDevTools({ formState, values, originalValues, validationSchema, position = 'bottom-left', title = 'Form DevTools' }: Props) {
+export default function FormDevTools({ formState, values, originalValues, validationSchema, reset, setValue, trigger, generateMock, position = 'bottom-left', title = 'Form DevTools' }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'values' | 'errors' | 'changed' | 'state' | 'validation'>('all');
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
@@ -133,6 +165,8 @@ export default function FormDevTools({ formState, values, originalValues, valida
   const [isResizing, setIsResizing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const { copy, copiedText } = useCopyToClipboard();
@@ -276,6 +310,57 @@ export default function FormDevTools({ formState, values, originalValues, valida
     ));
   };
 
+  // Mock 데이터 생성 핸들러
+  const handleGenerateMock = async () => {
+    if (!reset) {
+      setGenerateError('reset 함수가 필요합니다');
+      return;
+    }
+
+    if (!generateMock) {
+      setGenerateError('generateMock 함수가 필요합니다');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerateError(null);
+
+    try {
+      // 사용자가 제공한 generateMock 함수 사용
+      const mockData = await generateMock({
+        values,
+        originalValues,
+        validationSchema,
+      });
+
+      // reset으로 값 설정
+      // keepDirty: false는 reset 후 dirty를 초기화하는데, 
+      // 이후 setValue로 shouldDirty: true를 설정하면 dirty가 true가 됨
+      reset(mockData, { keepDirty: false, keepTouched: false });
+
+      // dirty와 validate를 true로 만들기 위해 setValue 사용
+      // reset 후에 setValue를 호출하면 dirty 상태가 true가 됨
+      if (setValue) {
+        // 모든 필드를 dirty로 만들고 validation 실행
+        Object.keys(mockData).forEach((key) => {
+          setValue(key, mockData[key], {
+            shouldDirty: true,      // dirty를 true로 설정
+            shouldValidate: true,   // validation 실행
+          });
+        });
+      }
+
+      // 전체 validation 실행
+      if (trigger) {
+        await trigger();
+      }
+    } catch (error: any) {
+      setGenerateError(error.message || 'Mock 데이터 생성 실패');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div style={getContainerStyle(position)}>
       <button
@@ -299,18 +384,52 @@ export default function FormDevTools({ formState, values, originalValues, valida
                 {formState.isValid ? '✓ Valid' : `✗ ${errorCount} Error${errorCount > 1 ? 's' : ''}`}
               </div>
             </div>
-            <button
-              onClick={handleCopy}
-              style={getCopyButtonStyle(isCopied)}
-              onMouseEnter={(e) => {
-                if (!isCopied) e.currentTarget.style.backgroundColor = '#2563eb';
-              }}
-              onMouseLeave={(e) => {
-                if (!isCopied) e.currentTarget.style.backgroundColor = '#3b82f6';
-              }}>
-              {isCopied ? '✓ Copied' : 'Copy All'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {reset && generateMock && (
+                <button
+                  onClick={handleGenerateMock}
+                  disabled={isGenerating}
+                  style={{
+                    ...getCopyButtonStyle(false),
+                    backgroundColor: isGenerating ? '#9ca3af' : '#10b981',
+                    opacity: isGenerating ? 0.6 : 1,
+                    cursor: isGenerating ? 'not-allowed' : 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isGenerating) e.currentTarget.style.backgroundColor = '#059669';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isGenerating) e.currentTarget.style.backgroundColor = '#10b981';
+                  }}>
+                  {isGenerating ? '⏳ Generating...' : '🤖 Generate Mock'}
+                </button>
+              )}
+              <button
+                onClick={handleCopy}
+                style={getCopyButtonStyle(isCopied)}
+                onMouseEnter={(e) => {
+                  if (!isCopied) e.currentTarget.style.backgroundColor = '#2563eb';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isCopied) e.currentTarget.style.backgroundColor = '#3b82f6';
+                }}>
+                {isCopied ? '✓ Copied' : 'Copy All'}
+              </button>
+            </div>
           </div>
+
+          {/* 에러 메시지 표시 */}
+          {generateError && (
+            <div style={{
+              padding: '8px 16px',
+              backgroundColor: '#fef2f2',
+              borderBottom: '1px solid #fecaca',
+              fontSize: '12px',
+              color: '#991b1b',
+            }}>
+              {generateError}
+            </div>
+          )}
 
           {/* 탭 메뉴 */}
           <div style={tabContainerStyle}>
