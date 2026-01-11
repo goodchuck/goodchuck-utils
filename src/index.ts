@@ -4,8 +4,8 @@ export * from './date';
 // Form utilities
 export * from './form';
 
-// String utilities (placeholder for future)
-// export * from './string';
+// String utilities
+export * from './string';
 
 // Array utilities (placeholder for future)
 // export * from './array';
