@@ -43,10 +43,19 @@ export type Props = {
   originalValues?: Record<string, any>;
   /** Validation 스키마 정보 (zod, yup 등) - refine 조건 표시에 사용 */
   validationSchema?: Record<string, any>;
-  /** react-hook-form의 reset 함수 (mock 데이터 생성 후 폼에 채우기 위해 필요) */
-  reset?: (values: Record<string, any>, options?: { keepDirty?: boolean; keepTouched?: boolean }) => void;
-  /** react-hook-form의 setValue 함수 (dirty 상태를 true로 만들기 위해 필요, 선택사항) */
-  setValue?: (name: string, value: any, options?: { shouldDirty?: boolean; shouldValidate?: boolean }) => void;
+  /** react-hook-form의 setValue 함수 (mock 데이터 생성 후 폼에 채우기 위해 필요) 
+   * useForm에서 받은 setValue를 그대로 전달하면 됩니다.
+   * 타입: UseFormSetValue<TFieldValues> (react-hook-form에서 제공)
+   */
+  setValue?: <TFieldValues = Record<string, any>>(
+    name: string | any,
+    value: any,
+    options?: {
+      shouldValidate?: boolean;
+      shouldDirty?: boolean;
+      shouldTouch?: boolean;
+    }
+  ) => void;
   /** react-hook-form의 trigger 함수 (validation 실행을 위해 필요, 선택사항) */
   trigger?: (name?: string | string[]) => Promise<boolean>;
   /** Mock 데이터 생성 함수 (비동기 가능) */
@@ -79,7 +88,7 @@ export type Props = {
  *     age: 0,
  *   };
  *
- *   const { register, handleSubmit, formState, watch } = useForm({
+ *   const { register, handleSubmit, formState, watch, setValue, trigger } = useForm({
  *     defaultValues,
  *   });
  *
@@ -96,7 +105,8 @@ export type Props = {
  *           formState={formState} 
  *           values={values}
  *           originalValues={defaultValues}
- *           reset={reset} // mock 데이터 생성 후 폼에 채우기 위해 필요
+ *           setValue={setValue} // mock 데이터 생성 후 폼에 채우기 위해 필요 (changedFields 정확성을 위해 권장)
+ *           trigger={trigger} // validation 실행을 위해 (선택사항)
  *           generateMock={async ({ values, validationSchema }) => {
  *             // AI를 사용한 mock 데이터 생성 (예시)
  *             const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -156,7 +166,7 @@ export type Props = {
  * }
  * ```
  */
-export default function FormDevTools({ formState, values, originalValues, validationSchema, reset, setValue, trigger, generateMock, position = 'bottom-left', title = 'Form DevTools' }: Props) {
+export default function FormDevTools({ formState, values, originalValues, validationSchema, setValue, trigger, generateMock, position = 'bottom-left', title = 'Form DevTools' }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'values' | 'errors' | 'changed' | 'state' | 'validation'>('all');
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
@@ -312,13 +322,13 @@ export default function FormDevTools({ formState, values, originalValues, valida
 
   // Mock 데이터 생성 핸들러
   const handleGenerateMock = async () => {
-    if (!reset) {
-      setGenerateError('reset 함수가 필요합니다');
+    if (!generateMock) {
+      setGenerateError('generateMock 함수가 필요합니다');
       return;
     }
 
-    if (!generateMock) {
-      setGenerateError('generateMock 함수가 필요합니다');
+    if (!setValue) {
+      setGenerateError('setValue 함수가 필요합니다');
       return;
     }
 
@@ -333,22 +343,28 @@ export default function FormDevTools({ formState, values, originalValues, valida
         validationSchema,
       });
 
-      // reset으로 값 설정
-      // keepDirty: false는 reset 후 dirty를 초기화하는데, 
-      // 이후 setValue로 shouldDirty: true를 설정하면 dirty가 true가 됨
-      reset(mockData, { keepDirty: false, keepTouched: false });
+      // setValue를 사용하여 각 필드를 설정
+      // reset을 사용하면 defaultValues가 업데이트되어 changedFields 계산이 부정확해짐
+      // setValue만 사용하면 originalValues와의 비교가 정확하게 유지됨
+      const setNestedValue = (data: Record<string, any>, prefix = '') => {
+        Object.keys(data).forEach((key) => {
+          const fullPath = prefix ? `${prefix}.${key}` : key;
+          const value = data[key];
 
-      // dirty와 validate를 true로 만들기 위해 setValue 사용
-      // reset 후에 setValue를 호출하면 dirty 상태가 true가 됨
-      if (setValue) {
-        // 모든 필드를 dirty로 만들고 validation 실행
-        Object.keys(mockData).forEach((key) => {
-          setValue(key, mockData[key], {
-            shouldDirty: true,      // dirty를 true로 설정
-            shouldValidate: true,   // validation 실행
-          });
+          if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            // 중첩된 객체인 경우 재귀적으로 처리
+            setNestedValue(value, fullPath);
+          } else {
+            // 최종 필드인 경우 setValue 호출
+            setValue(fullPath, value, {
+              shouldDirty: true,      // dirty를 true로 설정 (changedFields에 반영됨)
+              shouldValidate: true,   // validation 실행
+            });
+          }
         });
-      }
+      };
+
+      setNestedValue(mockData);
 
       // 전체 validation 실행
       if (trigger) {
@@ -385,7 +401,7 @@ export default function FormDevTools({ formState, values, originalValues, valida
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {reset && generateMock && (
+              {setValue && generateMock && (
                 <button
                   onClick={handleGenerateMock}
                   disabled={isGenerating}
