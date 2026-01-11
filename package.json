@@ -21,12 +21,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./hooks": {
       "types": "./dist/hooks/index.d.ts",
       "import": "./dist/hooks/index.js",
-      "require": "./dist/hooks/index.js"
+      "default": "./dist/hooks/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "hooks": ["./dist/hooks/index.d.ts"]
     }
   },
   "keywords": [],
