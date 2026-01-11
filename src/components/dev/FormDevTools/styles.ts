@@ -48,23 +48,27 @@ export const getPanelStyle = (
   panelPosition: { x: number; y: number },
   panelSize: { width: number; height: number },
   isDragging: boolean
-): CSSProperties => ({
-  position: 'fixed',
-  top: panelPosition.y || (position.includes('top') ? 60 : undefined),
-  bottom: !panelPosition.y && position.includes('bottom') ? 60 : undefined,
-  left: panelPosition.x || (position.includes('left') ? 0 : undefined),
-  right: !panelPosition.x && position.includes('right') ? 0 : undefined,
-  backgroundColor: 'white',
-  borderRadius: '12px',
-  boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
-  border: '1px solid #e5e7eb',
-  width: `${panelSize.width}px`,
-  height: `${panelSize.height}px`,
-  overflow: 'hidden',
-  display: 'flex',
-  flexDirection: 'column',
-  cursor: isDragging ? 'grabbing' : 'default',
-});
+): CSSProperties => {
+  const maxHeight = typeof window !== 'undefined' ? window.innerHeight * 0.85 : 600;
+  return {
+    position: 'fixed',
+    top: panelPosition.y || (position.includes('top') ? 60 : undefined),
+    bottom: !panelPosition.y && position.includes('bottom') ? 60 : undefined,
+    left: panelPosition.x || (position.includes('left') ? 0 : undefined),
+    right: !panelPosition.x && position.includes('right') ? 0 : undefined,
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+    border: '1px solid #e5e7eb',
+    width: `${panelSize.width}px`,
+    height: `${Math.min(panelSize.height, maxHeight)}px`,
+    maxHeight: `${maxHeight}px`,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    cursor: isDragging ? 'grabbing' : 'default',
+  };
+};
 
 export const headerStyle: CSSProperties = {
   padding: '12px 16px',
@@ -107,28 +111,11 @@ export const getCopyButtonStyle = (isCopied: boolean): CSSProperties => ({
   transition: 'background-color 0.2s',
 });
 
-export const tabContainerStyle: CSSProperties = {
-  display: 'flex',
-  borderBottom: '1px solid #e5e7eb',
-  backgroundColor: '#f9fafb',
-};
-
-export const getTabStyle = (isActive: boolean): CSSProperties => ({
-  flex: 1,
-  padding: '10px 16px',
-  border: 'none',
-  backgroundColor: isActive ? 'white' : 'transparent',
-  color: isActive ? '#8b5cf6' : '#6b7280',
-  cursor: 'pointer',
-  fontSize: '13px',
-  fontWeight: isActive ? 600 : 400,
-  borderBottom: isActive ? '2px solid #8b5cf6' : '2px solid transparent',
-  transition: 'all 0.15s',
-});
-
 export const contentStyle: CSSProperties = {
   flex: 1,
+  minHeight: 0, // flexbox에서 스크롤이 제대로 작동하도록 필수
   overflowY: 'auto',
+  overflowX: 'hidden',
   padding: '16px',
 };
 
@@ -148,7 +135,7 @@ export const codeBlockStyle: CSSProperties = {
   fontSize: '12px',
   fontFamily: 'monospace',
   overflow: 'auto',
-  maxHeight: '400px',
+  maxHeight: '300px',
   marginBottom: '16px',
   color: '#111827', // 검은색 텍스트
 };

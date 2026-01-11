@@ -8,8 +8,6 @@ import {
   headerTitleStyle,
   getStatusBadgeStyle,
   getCopyButtonStyle,
-  tabContainerStyle,
-  getTabStyle,
   contentStyle,
   sectionTitleStyle,
   codeBlockStyle,
@@ -100,9 +98,8 @@ export type Props = {
  */
 export default function FormDevTools({ formState, values, position = 'bottom-left', title = 'Form DevTools' }: Props) {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'values' | 'errors' | 'state'>('values');
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
-  const [panelSize, setPanelSize] = useState({ width: 500, height: 600 });
+  const [panelSize, setPanelSize] = useState({ width: 500, height: 400 });
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -144,9 +141,10 @@ export default function FormDevTools({ formState, values, position = 'bottom-lef
       if (isResizing) {
         const deltaX = e.clientX - resizeStart.x;
         const deltaY = e.clientY - resizeStart.y;
+        const maxHeight = window.innerHeight * 0.85; // 화면 높이의 85%를 최대값으로
         setPanelSize({
           width: Math.max(300, resizeStart.width + deltaX),
-          height: Math.max(200, resizeStart.height + deltaY),
+          height: Math.min(maxHeight, Math.max(200, resizeStart.height + deltaY)),
         });
       }
     };
@@ -245,81 +243,50 @@ export default function FormDevTools({ formState, values, position = 'bottom-lef
             </button>
           </div>
 
-          <div style={tabContainerStyle}>
-            <button
-              onClick={() => setActiveTab('values')}
-              style={getTabStyle(activeTab === 'values')}
-              onMouseEnter={(e) => {
-                if (activeTab !== 'values') e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== 'values') e.currentTarget.style.backgroundColor = 'transparent';
-              }}>
-              Values
-            </button>
-            <button
-              onClick={() => setActiveTab('errors')}
-              style={getTabStyle(activeTab === 'errors')}
-              onMouseEnter={(e) => {
-                if (activeTab !== 'errors') e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== 'errors') e.currentTarget.style.backgroundColor = 'transparent';
-              }}>
-              Errors ({errorCount})
-            </button>
-            <button
-              onClick={() => setActiveTab('state')}
-              style={getTabStyle(activeTab === 'state')}
-              onMouseEnter={(e) => {
-                if (activeTab !== 'state') e.currentTarget.style.backgroundColor = '#f3f4f6';
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== 'state') e.currentTarget.style.backgroundColor = 'transparent';
-              }}>
-              State
-            </button>
-          </div>
-
           <div style={contentStyle}>
-            {activeTab === 'values' && (
-              <>
-                <div style={sectionTitleStyle}>Form Values</div>
-                <pre style={codeBlockStyle}>{JSON.stringify(values || {}, null, 2)}</pre>
-              </>
-            )}
+            {/* Stats 섹션 */}
+            <div style={statsContainerStyle}>
+              <div style={statCardStyle}>
+                <div style={statLabelStyle}>Dirty Fields</div>
+                <div style={statValueStyle}>{dirtyFieldsCount}</div>
+              </div>
+              <div style={statCardStyle}>
+                <div style={statLabelStyle}>Touched Fields</div>
+                <div style={statValueStyle}>{touchedFieldsCount}</div>
+              </div>
+              <div style={statCardStyle}>
+                <div style={statLabelStyle}>Submit Count</div>
+                <div style={statValueStyle}>{formState.submitCount || 0}</div>
+              </div>
+              <div style={statCardStyle}>
+                <div style={statLabelStyle}>Submitting</div>
+                <div style={statValueStyle}>{formState.isSubmitting ? 'Yes' : 'No'}</div>
+              </div>
+            </div>
 
-            {activeTab === 'errors' && (
+            {/* Form Values 섹션 */}
+            <div style={sectionTitleStyle}>Form Values</div>
+            <pre style={codeBlockStyle}>{JSON.stringify(values || {}, null, 2)}</pre>
+
+            {/* Errors 섹션 */}
+            {errorCount > 0 && (
               <>
-                <div style={sectionTitleStyle}>Validation Errors</div>
+                <div style={sectionTitleStyle}>Validation Errors ({errorCount})</div>
                 {renderErrors()}
               </>
             )}
 
-            {activeTab === 'state' && (
+            {/* Dirty Fields */}
+            {dirtyFieldsCount > 0 && (
               <>
-                <div style={statsContainerStyle}>
-                  <div style={statCardStyle}>
-                    <div style={statLabelStyle}>Dirty Fields</div>
-                    <div style={statValueStyle}>{dirtyFieldsCount}</div>
-                  </div>
-                  <div style={statCardStyle}>
-                    <div style={statLabelStyle}>Touched Fields</div>
-                    <div style={statValueStyle}>{touchedFieldsCount}</div>
-                  </div>
-                  <div style={statCardStyle}>
-                    <div style={statLabelStyle}>Submit Count</div>
-                    <div style={statValueStyle}>{formState.submitCount || 0}</div>
-                  </div>
-                  <div style={statCardStyle}>
-                    <div style={statLabelStyle}>Submitting</div>
-                    <div style={statValueStyle}>{formState.isSubmitting ? 'Yes' : 'No'}</div>
-                  </div>
-                </div>
-
                 <div style={sectionTitleStyle}>Dirty Fields</div>
                 <pre style={codeBlockStyle}>{JSON.stringify(formState.dirtyFields || {}, null, 2)}</pre>
+              </>
+            )}
 
+            {/* Touched Fields */}
+            {touchedFieldsCount > 0 && (
+              <>
                 <div style={sectionTitleStyle}>Touched Fields</div>
                 <pre style={codeBlockStyle}>{JSON.stringify(formState.touchedFields || {}, null, 2)}</pre>
               </>

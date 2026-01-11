@@ -9,9 +9,10 @@
   ],
   "scripts": {
     "prepare": "npm run build:tsc",
-    "prepublishOnly": "npm run test:run && npm run build:tsc",
+    "prepublishOnly": "npm run test:run && npm run clean && npm run build:tsc",
     "build": "npm run build",
     "build:tsc": "tsc",
+    "clean": "rm -rf dist",
     "dev": "tsc --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
