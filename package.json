@@ -27,12 +27,28 @@
       "types": "./dist/hooks/index.d.ts",
       "import": "./dist/hooks/index.js",
       "default": "./dist/hooks/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js",
+      "default": "./dist/components/index.js"
+    },
+    "./components/dev": {
+      "types": "./dist/components/dev/index.d.ts",
+      "import": "./dist/components/dev/index.js",
+      "default": "./dist/components/dev/index.js"
     }
   },
   "typesVersions": {
     "*": {
       "hooks": [
         "./dist/hooks/index.d.ts"
+      ],
+      "components": [
+        "./dist/components/index.d.ts"
+      ],
+      "components/dev": [
+        "./dist/components/dev/index.d.ts"
       ]
     }
   },
@@ -51,10 +67,14 @@
     "vitest": "^4.0.16"
   },
   "peerDependencies": {
-    "react": ">=16.8.0"
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "react-dom": {
       "optional": true
     }
   }
