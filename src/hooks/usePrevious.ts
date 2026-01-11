@@ -58,7 +58,7 @@ import { useRef, useEffect } from 'react';
  */
 export function usePrevious<T>(value: T): T | undefined {
   // ref는 리렌더링 간에 값을 유지
-  const ref = useRef<T>();
+  const ref = useRef<T | undefined>(undefined);
 
   // 렌더링 후에 현재 값을 ref에 저장
   useEffect(() => {

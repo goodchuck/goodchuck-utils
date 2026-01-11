@@ -122,7 +122,7 @@ export function useEventListener<
     // 타겟 요소 결정
     const targetElement: T | Window = element instanceof Document
       ? element
-      : element?.current
+      : (element && 'current' in element && element.current)
       ? element.current
       : window;
 
