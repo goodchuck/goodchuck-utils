@@ -24,31 +24,12 @@ import {
   resizeHandleIndicatorStyle,
 } from './styles';
 
-export type FormState = {
-  values?: Record<string, any>;
-  errors?: Record<string, any>;
-  dirtyFields?: Record<string, any>;
-  touchedFields?: Record<string, any>;
-  isValid?: boolean;
-  isSubmitting?: boolean;
-  submitCount?: number;
-};
-
-export type Props = {
-  /** react-hook-form의 formState */
-  formState: FormState;
-  /** 현재 폼 values (watch() 결과) */
-  values?: Record<string, any>;
-  /** 초기값 (defaultValues 또는 reset()으로 설정한 원본 값, changedFields 계산에 사용) */
-  originalValues?: Record<string, any>;
-  /** Validation 스키마 정보 (zod, yup 등) - refine 조건 표시에 사용 */
-  validationSchema?: Record<string, any>;
-  /** react-hook-form의 setValue 함수 (mock 데이터 생성 후 폼에 채우기 위해 필요) 
-   * useForm에서 받은 setValue를 그대로 전달하면 됩니다.
-   * 타입: UseFormSetValue<TFieldValues> (react-hook-form에서 제공)
-   */
-  setValue?: <TFieldValues = Record<string, any>>(
-    name: string | any,
+// react-hook-form의 UseFormReturn 타입 (간소화된 버전)
+export type UseFormReturn<TFieldValues extends Record<string, any> = Record<string, any>> = {
+  watch: (name?: any) => any;
+  getValues: (name?: any) => any;
+  setValue: (
+    name: any,
     value: any,
     options?: {
       shouldValidate?: boolean;
@@ -56,14 +37,32 @@ export type Props = {
       shouldTouch?: boolean;
     }
   ) => void;
-  /** react-hook-form의 trigger 함수 (validation 실행을 위해 필요, 선택사항) */
-  trigger?: (name?: string | string[]) => Promise<boolean>;
+  trigger?: (name?: any) => Promise<boolean>;
+  formState: {
+    errors?: Record<string, any>;
+    dirtyFields?: Record<string, any>;
+    touchedFields?: Record<string, any>;
+    isValid?: boolean;
+    isSubmitting?: boolean;
+    submitCount?: number;
+    defaultValues?: TFieldValues;
+  };
+  handleSubmit?: (...args: any[]) => any;
+  register?: (...args: any[]) => any;
+  reset?: (...args: any[]) => any;
+  [key: string]: any; // react-hook-form의 다른 메서드들도 허용
+};
+
+export type Props = {
+  /** react-hook-form의 useForm() 반환값을 그대로 전달 */
+  form: UseFormReturn;
   /** Mock 데이터 생성 함수 (비동기 가능) */
   generateMock?: (params: {
     values?: Record<string, any>;
     originalValues?: Record<string, any>;
-    validationSchema?: Record<string, any>;
   }) => Promise<Record<string, any>> | Record<string, any>;
+  /** Validation 스키마 정보 (zod, yup 등) - 선택사항 */
+  validationSchema?: Record<string, any>;
   /** 표시 위치 (기본값: 'bottom-left') */
   position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   /** 패널 제목 (기본값: 'Form DevTools') */
@@ -76,55 +75,59 @@ export type Props = {
  *
  * @example
  * ```tsx
- * // Vite 프로젝트
+ * // Vite 프로젝트 - 간단한 사용법
  * import { useForm } from 'react-hook-form';
  * import { FormDevTools } from 'goodchuck-utils/components/dev';
  *
  * function MyForm() {
- *   // 신규 폼: defaultValues 사용
- *   const defaultValues = {
- *     username: '',
- *     email: '',
- *     age: 0,
- *   };
- *
- *   const { register, handleSubmit, formState, watch, setValue, trigger } = useForm({
- *     defaultValues,
+ *   const form = useForm({
+ *     defaultValues: {
+ *       username: '',
+ *       email: '',
+ *       age: 0,
+ *     }
  *   });
  *
- *   const values = watch();
+ *   return (
+ *     <form onSubmit={form.handleSubmit(onSubmit)}>
+ *       <input {...form.register('username')} />
+ *       <input {...form.register('email')} />
+ *       <button type="submit">Submit</button>
+ *
+ *       {import.meta.env.DEV && <FormDevTools form={form} />}
+ *     </form>
+ *   );
+ * }
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // Mock 데이터 생성 기능 포함
+ * function MyForm() {
+ *   const form = useForm({
+ *     defaultValues: {
+ *       username: '',
+ *       email: '',
+ *       age: 0,
+ *     }
+ *   });
  *
  *   return (
- *     <form onSubmit={handleSubmit(onSubmit)}>
- *       <input {...register('username')} />
- *       <input {...register('email')} />
+ *     <form onSubmit={form.handleSubmit(onSubmit)}>
+ *       <input {...form.register('username')} />
+ *       <input {...form.register('email')} />
  *       <button type="submit">Submit</button>
  *
  *       {import.meta.env.DEV && (
- *         <FormDevTools 
- *           formState={formState} 
- *           values={values}
- *           originalValues={defaultValues}
- *           setValue={setValue} // mock 데이터 생성 후 폼에 채우기 위해 필요 (changedFields 정확성을 위해 권장)
- *           trigger={trigger} // validation 실행을 위해 (선택사항)
- *           generateMock={async ({ values, validationSchema }) => {
- *             // AI를 사용한 mock 데이터 생성 (예시)
- *             const response = await fetch('https://api.openai.com/v1/chat/completions', {
- *               method: 'POST',
- *               headers: {
- *                 'Content-Type': 'application/json',
- *                 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
- *               },
- *               body: JSON.stringify({
- *                 model: 'gpt-3.5-turbo',
- *                 messages: [{
- *                   role: 'user',
- *                   content: `다음 폼 필드에 맞는 mock 데이터를 생성해주세요: ${JSON.stringify(values)}`
- *                 }],
- *               }),
- *             });
- *             const data = await response.json();
- *             return JSON.parse(data.choices[0].message.content);
+ *         <FormDevTools
+ *           form={form}
+ *           generateMock={async ({ values, originalValues }) => {
+ *             // Mock 데이터 생성 로직
+ *             return {
+ *               username: 'test_user',
+ *               email: 'test@example.com',
+ *               age: 25,
+ *             };
  *           }}
  *         />
  *       )}
@@ -135,28 +138,23 @@ export type Props = {
  *
  * @example
  * ```tsx
- * // 수정 폼: reset()으로 초기값 설정
+ * // 수정 폼 예시
  * function EditForm({ userData }) {
- *   const { register, handleSubmit, formState, watch, reset } = useForm();
+ *   const form = useForm();
  *
  *   useEffect(() => {
- *     // 서버에서 가져온 데이터로 폼 초기화
- *     reset(userData);
- *   }, [userData, reset]);
- *
- *   const values = watch();
+ *     form.reset(userData);
+ *   }, [userData]);
  *
  *   return (
- *     <form onSubmit={handleSubmit(onSubmit)}>
- *       <input {...register('username')} />
- *       <input {...register('email')} />
+ *     <form onSubmit={form.handleSubmit(onSubmit)}>
+ *       <input {...form.register('username')} />
+ *       <input {...form.register('email')} />
  *       <button type="submit">Update</button>
  *
  *       {process.env.NODE_ENV === 'development' && (
  *         <FormDevTools
- *           formState={formState}
- *           values={values}
- *           originalValues={userData} // reset()으로 설정한 원본 값
+ *           form={form}
  *           position="top-right"
  *           title="Edit Form Debug"
  *         />
@@ -166,7 +164,12 @@ export type Props = {
  * }
  * ```
  */
-export default function FormDevTools({ formState, values, originalValues, validationSchema, setValue, trigger, generateMock, position = 'bottom-left', title = 'Form DevTools' }: Props) {
+export default function FormDevTools({ form, validationSchema, generateMock, position = 'bottom-left', title = 'Form DevTools' }: Props) {
+  // form 객체에서 필요한 값들 추출
+  const { formState, watch, setValue, trigger } = form;
+  const values = watch(); // 모든 값을 watch
+  const originalValues = formState.defaultValues; // defaultValues를 원본 값으로 사용
+
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'values' | 'errors' | 'changed' | 'state' | 'validation'>('all');
   const [panelPosition, setPanelPosition] = useState({ x: 0, y: 0 });
@@ -203,7 +206,7 @@ export default function FormDevTools({ formState, values, originalValues, valida
   // Changed Fields 계산: dirtyFields를 기반으로 실제 변경된 값들을 추출
   const getChangedFields = () => {
     if (!formState.dirtyFields || !values) return {};
-    
+
     const changed: Record<string, any> = {};
     const getNestedValue = (obj: Record<string, any>, path: string) => {
       return path.split('.').reduce((acc, key) => acc?.[key], obj);
@@ -213,12 +216,12 @@ export default function FormDevTools({ formState, values, originalValues, valida
       Object.keys(dirty).forEach((key) => {
         const fullPath = prefix ? `${prefix}.${key}` : key;
         const dirtyValue = dirty[key];
-        
+
         if (dirtyValue === true) {
           // 최종 필드인 경우
           const currentValue = getNestedValue(values, fullPath);
           const originalValue = originalValues ? getNestedValue(originalValues, fullPath) : undefined;
-          
+
           if (JSON.stringify(currentValue) !== JSON.stringify(originalValue)) {
             changed[fullPath] = {
               from: originalValue,
@@ -327,11 +330,6 @@ export default function FormDevTools({ formState, values, originalValues, valida
       return;
     }
 
-    if (!setValue) {
-      setGenerateError('setValue 함수가 필요합니다');
-      return;
-    }
-
     setIsGenerating(true);
     setGenerateError(null);
 
@@ -340,7 +338,6 @@ export default function FormDevTools({ formState, values, originalValues, valida
       const mockData = await generateMock({
         values,
         originalValues,
-        validationSchema,
       });
 
       // setValue를 사용하여 각 필드를 설정
@@ -401,7 +398,7 @@ export default function FormDevTools({ formState, values, originalValues, valida
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {setValue && generateMock && (
+              {generateMock && (
                 <button
                   onClick={handleGenerateMock}
                   disabled={isGenerating}
